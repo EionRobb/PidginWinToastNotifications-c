@@ -1,9 +1,16 @@
+#ifndef PURPLE_PLUGINS
 #define PURPLE_PLUGINS
+#endif
 
+#include <windows.h>
 #include <search.h>
-#include "string.h"
+#include <string.h>
 
 #include <glib.h>
+#include <gtk/gtk.h>
+
+#include "purple.h"
+#include "pidgin.h"
 #include "gtkplugin.h"
 #include "gtkconv.h"
 #include "gtkconvwin.h"
@@ -15,17 +22,8 @@
 #include "version.h"
 #include "blist.h"
 
-typedef int(__cdecl *initProc)(
-	void (*clickCallback)(void *conv)
-);
+#include "win_toast.h"
 
-typedef int(__cdecl *showToastProc)(
-	const char *sender,
-	const char *message,
-	const char *imagePath,
-	const char *protocolName,
-	void *conv
-);
 
 const char *base_settings_path = "/plugins/gtk/gallax-win_toast_notifications";
 
@@ -54,7 +52,7 @@ typedef struct {
 
 int compare_connection_nodes (const void *a, const void *b);
 
-const struct status_options_paths labels = {
+static const struct status_options_paths labels = {
 	NULL,
 	"Enabled",
 	"Direct messages",
@@ -63,9 +61,7 @@ const struct status_options_paths labels = {
 	"Even if the window is focused"
 };
 
-HINSTANCE hinstLib;
-initProc initAdd;
-showToastProc showToastProcAdd;
+
 
 typedef enum {
 	SETTING_NONE,
@@ -97,7 +93,7 @@ static char* get_attr_text(
 );
 
 static void toast_clicked_cb(
-	PurpleConversation *conv
+	void *conv
 );
 
 static gboolean should_show_message(

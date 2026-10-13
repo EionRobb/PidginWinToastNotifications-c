@@ -1,11 +1,13 @@
 # PidginWinToastNotifications
 
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ChristianGalla/PidginWinToastNotifications?label=Latest%20release%20version)](https://github.com/ChristianGalla/PidginWinToastNotifications/releases/latest)
-[![GitHub Release Date](https://img.shields.io/github/release-date/ChristianGalla/PidginWinToastNotifications?label=Latest%20release%20date)](https://github.com/ChristianGalla/PidginWinToastNotifications/releases/latest)
-[![GitHub](https://img.shields.io/github/license/ChristianGalla/PidginWinToastNotifications?label=License)](https://github.com/ChristianGalla/PidginWinToastNotifications/blob/master/LICENSE)
-[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/ChristianGalla/PidginWinToastNotifications/total?label=Downloads)](https://github.com/ChristianGalla/PidginWinToastNotifications/releases/latest)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/EionRobb/PidginWinToastNotifications?label=Latest%20release%20version)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
+[![GitHub Release Date](https://img.shields.io/github/release-date/EionRobb/PidginWinToastNotifications?label=Latest%20release%20date)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
+[![GitHub](https://img.shields.io/github/license/EionRobb/PidginWinToastNotifications?label=License)](https://github.com/EionRobb/PidginWinToastNotifications/blob/master/LICENSE)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/EionRobb/PidginWinToastNotifications/total?label=Downloads)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
 
 Windows toast notification plugin for [Pidgin](https://pidgin.im/).
+
+A pure-C version of [PidginWinToastNotifications](https://github.com/ChristianGalla/PidginWinToastNotifications). Built with compatibility with the [pidgin-win7](https://github.com/EionRobb/pidgin-win7) plugin in mind.
 
 Shows notifications on message receive or buddy sign on / off in the standard Windows design.
 
@@ -45,11 +47,7 @@ This plugin uses Pidgin's standard C API so no other tools like Perl are require
 
 ## Supported Pidgin versions
 
-The plugin was developed and tested using the newest Pidgin 2 version 2.13.0.
-
-For Pidgin version 2.12.0 there is an [alternate download](https://github.com/ChristianGalla/PidginWinToastNotifications/releases/download/v1.6.1/PidginWinToastNotifications.for.Pidgin.2.12.0.zip).
-
-Older versions of Pidgin are currently not supported.
+Supports all versions of Pidgin 2.
 
 ## Supported operating systems
 
@@ -61,17 +59,15 @@ To display the protocol, account and chat name in the toast notifications the Wi
 
 ## Installation
 
-1. Ensure to have the Microsoft Visual C++ 2015-2019 Redistributable (x86) installed or [download and install it from Microsoft](https://aka.ms/vs/16/release/vc_redist.x86.exe).
-2. Download the dll files from the [newest release](https://github.com/ChristianGalla/PidginWinToastNotifications/releases/latest).
-3. Copy the file PidginWinToastLib.dll to the installation directory of Pidgin. This is usually "C:\Program Files (x86)\Pidgin" on 64-bit versions of Windows or "C:\Program Files\Pidgin" on a 32-bit version.
-4. Copy the file PidginWinToastNotifications.dll to the plugin directory of Pidgin. This is usually "C:\Program Files (x86)\Pidgin\plugins" on 64-bit versions of Windows or "C:\Program Files\Pidgin\plugins" on a 32-bit version.
-5. Start Pidgin. Open the plugin window and enable "Windows Toast Notifications".
+1. Download the dll files from the [newest release](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest).
+2. Copy the file PidginWinToastNotifications-c.dll to the plugin directory of Pidgin. This is usually "C:\Program Files (x86)\Pidgin\plugins" on 64-bit versions of Windows or "C:\Program Files\Pidgin\plugins" on a 32-bit version.
+3. Start Pidgin. Open the plugin window and enable "Windows Toast Notifications".
 
 ## Troubleshooting
 
 If the plugin cannot be enabled, there should be an error message in the error search window available in the help menu of Pidgin.
 
-If you experience a problem or have an idea for a new feature, [feel free to open an issue](https://github.com/ChristianGalla/PidginWinToastNotifications/issues).
+If you experience a problem or have an idea for a new feature, [feel free to open an issue](https://github.com/EionRobb/PidginWinToastNotifications/issues).
 
 ### Known errors
 
@@ -138,29 +134,18 @@ All changes between versions are documented in the file [CHANGELOG.md](./CHANGEL
 
 ## Architecture
 
-This Plugin consists of the two dll files PidginWinToastNotifications.dll and PidginWinToastLib.dll.
-
-PidginWinToastNotifications.dll is loaded from Pidgin as plugin. It is written in ANSI C and it provides necessary plugin information. It registers callback functions in Pidgin's message API and relays received messages to PidginWinToastLib.dll.
-
-PidginWinToastLib.dll is written in C++ and calls Windows's toast notification API to display the toast notifications. For that it uses [WinToast](https://github.com/mohabouje/WinToast) as library.
+This plugin is a pure-C rewrite of PidginWinToastNotifications.  The original version had a multi-tiered approach, previously using a mingw C -> msvc C++ bridge -> C# toast library.  Now it's just a single C library.
 
 ## How to build on Windows
 
-### PidginWinToastNotifications.dll
+### PidginWinToastNotifications-c.dll
 
 This file is build using the GNU Compiler Collection (GCC).
 
 1. Follow the [official instructions of the Pidgin wiki to set up your build environment](https://developer.pidgin.im/wiki/BuildingWinPidgin#Setupyourbuildenvironment). For this I recommend [pidgin-windev](https://github.com/renatosilva/pidgin-windev).
 2. Copy the files Plugin/PidginWinToastNotifications.h and Plugin/PidginWinToastNotifications.c into the subfolder pidgin\plugins inside of your Pidgin development directory.
 3. Inside a Cygwin Terminal navigate to pidgin\plugins inside of your Pidgin development directory.
-4. Run the Command: *make -f Makefile.mingw PidginWinToastNotifications.dll*
+4. Run the Command: *make*
 
-Now the file PidginWinToastNotifications.dll should be in the same folder.
+Now the file PidginWinToastNotifications-c.dll should be in the same folder.
 
-### PidginWinToastLib.dll
-
-This file is build using Visual Studio 2017.
-
-Open the Solution lib/PidginWinToastLib.sln in Visual Studio 2017. Right click on the Project and hit Build.
-
-Now the file PidginWinToastLib.dll should be in the Release folder of your Solution.

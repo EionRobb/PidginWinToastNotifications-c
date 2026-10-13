@@ -237,22 +237,22 @@ static PidginPluginUiInfo pidgin_plugin_info = {
 
 static PurplePluginInfo info = {
 	PURPLE_PLUGIN_MAGIC,
-	PURPLE_MAJOR_VERSION,
-	PURPLE_MINOR_VERSION,
+	2,
+	3,
 	PURPLE_PLUGIN_STANDARD,
 	PIDGIN_PLUGIN_TYPE,
 	0,
 	NULL,
 	PURPLE_PRIORITY_DEFAULT,
 
-	"gtk-win32-gallax-win_toast_notifications",
-	"Windows Toast Notifications",
+	"gtk-win32-eionrobb-win_toast_notifications",
+	"Windows Toast Notifications (C)",
 	"1.6.1",
 
 	"Native Windows Toast Notifications.",
 	"Displays native Windows Toast Notifications.",
-	"Christian Galla <ChristianGalla@users.noreply.github.com>",
-	"https://github.com/ChristianGalla/PidginWinToastNotifications",
+	"Eion Robb <EionRobb@users.noreply.github.com>",
+	"https://github.com/EionRobb/PidginWinToastNotifications-c",
 
 	plugin_load,
 	plugin_unload,
@@ -356,10 +356,10 @@ static char *get_attr_text(const char *protocolName, const char *userName, const
 	return ret;
 }
 
-static void toast_clicked_cb(PurpleConversation *conv)
+static gboolean toast_clicked_idle(gpointer data)
 {
+	PurpleConversation *conv = (PurpleConversation *)data;
 	PidginConversation *gtkconv;
-	purple_debug_misc("win_toast_notifications", "toast clicked\n");
 	if (conv != NULL) {
 		pidgin_conv_attach_to_conversation(conv);
 		gtkconv = PIDGIN_CONVERSATION(conv);
@@ -367,7 +367,17 @@ static void toast_clicked_cb(PurpleConversation *conv)
 		pidgin_conv_window_switch_gtkconv(gtkconv->win, gtkconv);
 		gtk_window_present(GTK_WINDOW(gtkconv->win->window));
 	}
+	return FALSE;
 }
+
+static void toast_clicked_cb(void *conv)
+{
+	purple_debug_misc("win_toast_notifications", "toast clicked\n");
+	if (conv != NULL) {
+		g_idle_add(toast_clicked_idle, conv);
+	}
+}
+
 
 static gboolean get_effective_setting(PurpleStatusPrimitive status, Setting setting, Buddy_type buddy_type, const char *group_name, const char *protocol_id, const char *account_name, const char *buddy_name) {
 	char *path;
@@ -614,7 +624,7 @@ static void displayed_msg_cb(
 		purple_debug_misc("win_toast_notifications", "displayed_msg_cb (%s, %s, %s, %s, %s, %d)\n",
 							protocolName, userName, sender, buffer,
 							chatName, flags);
-		callResult = (showToastProcAdd)(senderName, buffer, iconPath, attrText, conv);
+		callResult = win_toast_show_message(senderName, buffer, iconPath, attrText, conv);
 		if (callResult)
 		{
 			output_toast_error(callResult, "Failed to show Toast Notification");
@@ -740,7 +750,7 @@ static void buddy_sign_cb(
 		attrText = get_attr_text(protocolName, account_name, NULL);
 
 		// todo: handover a reference to the buddy to be able to create a conversation on click on the notification
-		callResult = (showToastProcAdd)(senderName, message, iconPath, attrText, NULL);
+		callResult = win_toast_show_message(senderName, message, iconPath, attrText, NULL);
 		if (callResult)
 		{
 			output_toast_error(callResult, "Failed to show Toast Notification");
@@ -1143,102 +1153,70 @@ context_menu(PurpleBlistNode *node, GList **menu, gpointer plugin)
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
+	int callResult;
+	void *conv_handle;
+	void *blist_handle;
+	void *account_handle;
+	GList* accounts = NULL;
+
 	purple_debug_misc("win_toast_notifications", "loading...\n");
 
 	set_default_prefs();
 
-	hinstLib = LoadLibrary(TEXT("PidginWinToastLib.dll"));
-
-	if (hinstLib != NULL)
+	callResult = win_toast_init(toast_clicked_cb);
+	if (callResult != WIN_TOAST_SUCCESS)
 	{
-		purple_debug_misc("win_toast_notifications",
-						  "dll loaded\n");
-
-		initAdd = (initProc)GetProcAddress(hinstLib, "pidginWinToastLibInit");
-		showToastProcAdd = (showToastProc)GetProcAddress(hinstLib, "pidginWinToastLibShowMessage");
-
-		if (initAdd == NULL)
-		{
-			purple_debug_misc("win_toast_notifications", "pidginWinToastLibInit not found!\n");
-		}
-		else if (showToastProcAdd == NULL)
-		{
-			purple_debug_misc("win_toast_notifications", "pidginWinToastLibShowMessage not found!\n");
-		}
-		else
-		{
-			int callResult;
-			void *conv_handle;
-			void *blist_handle;
-			void *account_handle;
-			purple_debug_misc("win_toast_notifications",
-							  "pidginWinToastLibInit called\n");
-			callResult = (initAdd)((void *)toast_clicked_cb);
-			if (callResult)
-			{
-				output_toast_error(callResult, "Initialization failed");
-			}
-			else
-			{
-				GList* accounts = NULL;
-				purple_debug_misc("win_toast_notifications",
-								  "pidginWinToastLibInit initialized\n");
-
-				num_connection_nodes = 0;
-				connection_root = NULL;
-				accounts = purple_accounts_get_all();
-				while (accounts != NULL) {
-					ConnectionNode **tree_node = NULL;
-					ConnectionNode *node = malloc(sizeof(ConnectionNode));
-					if (node == NULL) {
-						plugin_unload(plugin);
-						return FALSE;
-					}
-					node->account = accounts->data;
-					node->connect_time = time(NULL);
-					if (node->connect_time == (time_t) -1) {
-						free(node);
-						plugin_unload(plugin);
-						return FALSE;
-					}
-					tree_node = (ConnectionNode **)tsearch((void*)node, (void*)&connection_root, compare_connection_nodes);
-					if (tree_node == NULL) {
-						free(node);
-						plugin_unload(plugin);
-						return FALSE;
-					}
-					num_connection_nodes++;
-					
-					accounts = accounts->next;
-				}
-
-				conv_handle = pidgin_conversations_get_handle();
-				blist_handle = purple_blist_get_handle();
-				account_handle = purple_accounts_get_handle();
-				purple_signal_connect(conv_handle, "displayed-im-msg",
-									  plugin, PURPLE_CALLBACK(displayed_msg_cb), NULL);
-				purple_signal_connect(conv_handle, "displayed-chat-msg",
-									  plugin, PURPLE_CALLBACK(displayed_msg_cb), NULL);
-				purple_signal_connect(blist_handle, "buddy-signed-on",
-									  plugin, PURPLE_CALLBACK(buddy_sign_cb), (void*)TRUE);
-				purple_signal_connect(blist_handle, "buddy-signed-off",
-									  plugin, PURPLE_CALLBACK(buddy_sign_cb), (void*)FALSE);
-				purple_signal_connect(blist_handle, "blist-node-extended-menu",
-									  plugin, PURPLE_CALLBACK(context_menu), plugin);
-				purple_signal_connect(account_handle, "account-signed-on",
-									  plugin, PURPLE_CALLBACK(account_signed_on), NULL);
-
-				return TRUE;
-			}
-		}
-	}
-	else
-	{
-		purple_debug_misc("win_toast_notifications",
-						  "failed to load dll\n");
+		output_toast_error(callResult, "Initialization failed");
+		return FALSE;
 	}
 
-	return FALSE;
+	purple_debug_misc("win_toast_notifications", "win_toast initialized\n");
+
+	num_connection_nodes = 0;
+	connection_root = NULL;
+	accounts = purple_accounts_get_all();
+	while (accounts != NULL) {
+		ConnectionNode **tree_node = NULL;
+		ConnectionNode *node = malloc(sizeof(ConnectionNode));
+		if (node == NULL) {
+			plugin_unload(plugin);
+			return FALSE;
+		}
+		node->account = accounts->data;
+		node->connect_time = time(NULL);
+		if (node->connect_time == (time_t) -1) {
+			free(node);
+			plugin_unload(plugin);
+			return FALSE;
+		}
+		tree_node = (ConnectionNode **)tsearch((void*)node, (void*)&connection_root, compare_connection_nodes);
+		if (tree_node == NULL) {
+			free(node);
+			plugin_unload(plugin);
+			return FALSE;
+		}
+		num_connection_nodes++;
+		
+		accounts = accounts->next;
+	}
+
+	conv_handle = pidgin_conversations_get_handle();
+	blist_handle = purple_blist_get_handle();
+	account_handle = purple_accounts_get_handle();
+	purple_signal_connect(conv_handle, "displayed-im-msg",
+						  plugin, PURPLE_CALLBACK(displayed_msg_cb), NULL);
+	purple_signal_connect(conv_handle, "displayed-chat-msg",
+						  plugin, PURPLE_CALLBACK(displayed_msg_cb), NULL);
+	purple_signal_connect(blist_handle, "buddy-signed-on",
+						  plugin, PURPLE_CALLBACK(buddy_sign_cb), (void*)TRUE);
+	purple_signal_connect(blist_handle, "buddy-signed-off",
+						  plugin, PURPLE_CALLBACK(buddy_sign_cb), (void*)FALSE);
+	purple_signal_connect(blist_handle, "blist-node-extended-menu",
+						  plugin, PURPLE_CALLBACK(context_menu), plugin);
+	purple_signal_connect(account_handle, "account-signed-on",
+						  plugin, PURPLE_CALLBACK(account_signed_on), NULL);
+
+	return TRUE;
 }
 
 void add_connection_node_to_delete_array (const void *nodep, VISIT value, int level) {
@@ -1259,13 +1237,12 @@ plugin_unload(PurplePlugin *plugin)
 		tdelete((void*)node, (void*)&connection_root, compare_connection_nodes);
 		free(node);
 	}
+	free(connection_nodes_to_delete);
+	connection_nodes_to_delete = NULL;
 
 	purple_signals_disconnect_by_handle(plugin);
 
-	if (hinstLib != NULL)
-	{
-		FreeLibrary(hinstLib);
-	}
+	win_toast_uninit();
 
 	return TRUE;
 }
