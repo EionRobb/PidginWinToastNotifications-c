@@ -45,13 +45,6 @@ struct status_options_paths {
 	const char * for_focus;
 };
 
-typedef struct {
-	PurpleAccount * account;
-	time_t connect_time;
-} ConnectionNode;
-
-int compare_connection_nodes (const void *a, const void *b);
-
 static const struct status_options_paths labels = {
 	NULL,
 	"Enabled",
@@ -243,5 +236,3 @@ static gboolean get_effective_setting(
 GtkWidget * get_config_frame(
 	PurplePlugin *plugin
 );
-
-void add_connection_node_to_delete_array (const void *nodep, VISIT value, int level);

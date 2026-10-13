@@ -1,19 +1,6 @@
 #include "PidginWinToastNotifications.h"
 
-ConnectionNode ** connection_root = NULL;
-int num_connection_nodes = 0;
-
-// for add_connection_node_to_delete_array
-ConnectionNode ** connection_nodes_to_delete = NULL;
-int current_connection_node_id = 0;
-
-int compare_connection_nodes (const void *a, const void *b)
-{
-  const ConnectionNode *ca = (const ConnectionNode *) a;
-  const ConnectionNode *cb = (const ConnectionNode *) b;
-
-  return (ca->account > cb->account) - (ca->account < cb->account);
-}
+static GHashTable *account_connect_times = NULL;
 
 static void ensure_prefs_path(const char *path) {
 	char *subPath;
@@ -311,6 +298,8 @@ static char *get_attr_text(const char *protocolName, const char *userName, const
 	const char *chatText = "In chat ";
 	const char *formatText = " ()";
 	const char *formatChat = "\r\n";
+	if (!protocolName) protocolName = "";
+	if (!userName) userName = "";
 	int startTextSize = strlen(startText);
 	int formatTextSize = strlen(formatText);
 	int protocolNameSize = strlen(protocolName);
@@ -361,11 +350,18 @@ static gboolean toast_clicked_idle(gpointer data)
 	PurpleConversation *conv = (PurpleConversation *)data;
 	PidginConversation *gtkconv;
 	if (conv != NULL) {
+		/* Verify conversation is still alive before dereferencing to prevent use-after-free */
+		if (g_list_find(purple_get_conversations(), conv) == NULL) {
+			purple_debug_misc("win_toast_notifications", "Conversation closed before toast was clicked\n");
+			return FALSE;
+		}
 		pidgin_conv_attach_to_conversation(conv);
 		gtkconv = PIDGIN_CONVERSATION(conv);
-		pidgin_conv_switch_active_conversation(conv);
-		pidgin_conv_window_switch_gtkconv(gtkconv->win, gtkconv);
-		gtk_window_present(GTK_WINDOW(gtkconv->win->window));
+		if (gtkconv && gtkconv->win && gtkconv->win->window) {
+			pidgin_conv_switch_active_conversation(conv);
+			pidgin_conv_window_switch_gtkconv(gtkconv->win, gtkconv);
+			gtk_window_present(GTK_WINDOW(gtkconv->win->window));
+		}
 	}
 	return FALSE;
 }
@@ -640,28 +636,11 @@ static void displayed_msg_cb(
 static void account_signed_on(
 	PurpleAccount *account
 ) {
-	ConnectionNode **tree_node = NULL;
-	ConnectionNode *node = malloc(sizeof(ConnectionNode));
-	if (node == NULL) {
-		return;
+	if (account_connect_times && account) {
+		time_t *t = g_new(time_t, 1);
+		*t = time(NULL);
+		g_hash_table_replace(account_connect_times, account, t);
 	}
-	node->account = account;
-	node->connect_time = time(NULL);
-	if (node->connect_time == (time_t) -1) {
-		free(node);
-		return;
-	}
-	tree_node = (ConnectionNode **)tsearch((void*)node, (void*)&connection_root, compare_connection_nodes);
-	if (tree_node == NULL) {
-		free(node);
-		return;
-	}
-	if (*tree_node != node) {
-		(*tree_node)->connect_time = node->connect_time;
-		free(node);
-		return;
-	}
-	num_connection_nodes++;
 }
 
 static void buddy_sign_cb(
@@ -684,8 +663,6 @@ static void buddy_sign_cb(
 	PurpleAccount * account = NULL;
 	char * message = NULL;
 	Setting setting;
-	ConnectionNode *node = NULL;
-	ConnectionNode **tree_node = NULL;
 	time_t current_time;
 	int notificationDelayAfterSignOnInS = 5;
 
@@ -701,26 +678,16 @@ static void buddy_sign_cb(
 
 	account = purple_buddy_get_account(buddy);
 
-	node = malloc(sizeof(ConnectionNode));
-	if (node == NULL) {
-		return;
-	}
-	node->account = account;
-	if (node->connect_time == (time_t) -1) {
-		free(node);
-		return;
-	}
-	tree_node = (ConnectionNode **)tfind((void*)node, (void*)&connection_root, compare_connection_nodes);
-	free(node);
-	if (tree_node == NULL) {
-		return;
-	}
-	current_time = time(NULL);
-	if (((current_time - (*tree_node)->connect_time)) < notificationDelayAfterSignOnInS) {
-		// do not show sign on notifications of a buddy in the first seconds after signed on
-		// because this can produce many notifications
-		// todo: make this customizable by the user?
-		return;
+	if (account_connect_times && account) {
+		time_t *conn_time = (time_t *)g_hash_table_lookup(account_connect_times, account);
+		if (conn_time != NULL) {
+			current_time = time(NULL);
+			if ((current_time - *conn_time) < notificationDelayAfterSignOnInS) {
+				// do not show sign on notifications of a buddy in the first seconds after signed on
+				// because this can produce many notifications
+				return;
+			}
+		}
 	}
 
 
@@ -1048,23 +1015,31 @@ static void show_local_settings_dialog(PurpleBlistNode *node, gpointer plugin)
 	} else if (PURPLE_BLIST_NODE_IS_CHAT(node)) {
 		chatNode = (PurpleChat*) node;
 		prpl = purple_find_prpl(purple_account_get_protocol_id(chatNode->account));
-		prpl_info = PURPLE_PLUGIN_PROTOCOL_INFO(prpl);
-		if (prpl_info->chat_info) {
+		prpl_info = prpl ? PURPLE_PLUGIN_PROTOCOL_INFO(prpl) : NULL;
+		if (prpl_info && prpl_info->chat_info) {
 			struct proto_chat_entry *pce;
 			GList *parts = prpl_info->chat_info(purple_account_get_connection(chatNode->account));
-			pce = parts->data;
-			chatName = g_hash_table_lookup(chatNode->components, pce->identifier);
-			g_list_foreach(parts, (GFunc)g_free, NULL);
-			g_list_free(parts);
-			buddy_type = BUDDY_TYPE_CHAT;
-			account_name = chatNode->account->username;
-			buddy_name = chatName;
-			protocol_id = chatNode->account->protocol_id;
-			purple_debug_misc("win_toast_notifications", "Open local settings dialog for chat: %s, protocol: %s, username: %s\n", chatName, protocol_id, account_name);
-		} else {
-			purple_debug_error("win_toast_notifications", "Cannot open local settings dialog for chat because it has no chat_info");
+			if (parts != NULL) {
+				pce = (struct proto_chat_entry *)parts->data;
+				if (pce && pce->identifier) {
+					chatName = g_hash_table_lookup(chatNode->components, pce->identifier);
+				}
+				g_list_foreach(parts, (GFunc)g_free, NULL);
+				g_list_free(parts);
+			}
+		}
+		if (chatName == NULL) {
+			chatName = purple_chat_get_name(chatNode);
+		}
+		if (chatName == NULL) {
+			purple_debug_error("win_toast_notifications", "Cannot open local settings dialog for chat: chat name could not be resolved\n");
 			return;
 		}
+		buddy_type = BUDDY_TYPE_CHAT;
+		account_name = purple_account_get_username(chatNode->account);
+		buddy_name = chatName;
+		protocol_id = purple_account_get_protocol_id(chatNode->account);
+		purple_debug_misc("win_toast_notifications", "Open local settings dialog for chat: %s, protocol: %s, username: %s\n", chatName, protocol_id, account_name);
 		label = gtk_label_new("Overwrite global and group settings for this chat");
 	} else {
 		return;
@@ -1172,32 +1147,11 @@ plugin_load(PurplePlugin *plugin)
 
 	purple_debug_misc("win_toast_notifications", "win_toast initialized\n");
 
-	num_connection_nodes = 0;
-	connection_root = NULL;
-	accounts = purple_accounts_get_all();
-	while (accounts != NULL) {
-		ConnectionNode **tree_node = NULL;
-		ConnectionNode *node = malloc(sizeof(ConnectionNode));
-		if (node == NULL) {
-			plugin_unload(plugin);
-			return FALSE;
-		}
-		node->account = accounts->data;
-		node->connect_time = time(NULL);
-		if (node->connect_time == (time_t) -1) {
-			free(node);
-			plugin_unload(plugin);
-			return FALSE;
-		}
-		tree_node = (ConnectionNode **)tsearch((void*)node, (void*)&connection_root, compare_connection_nodes);
-		if (tree_node == NULL) {
-			free(node);
-			plugin_unload(plugin);
-			return FALSE;
-		}
-		num_connection_nodes++;
-		
-		accounts = accounts->next;
+	account_connect_times = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
+	for (accounts = purple_accounts_get_all(); accounts != NULL; accounts = accounts->next) {
+		time_t *t = g_new(time_t, 1);
+		*t = time(NULL);
+		g_hash_table_replace(account_connect_times, accounts->data, t);
 	}
 
 	conv_handle = pidgin_conversations_get_handle();
@@ -1219,26 +1173,13 @@ plugin_load(PurplePlugin *plugin)
 	return TRUE;
 }
 
-void add_connection_node_to_delete_array (const void *nodep, VISIT value, int level) {
-	ConnectionNode * node = *((ConnectionNode **)nodep);
-	connection_nodes_to_delete[current_connection_node_id] = node;
-	current_connection_node_id++;
-}
-
 static gboolean
 plugin_unload(PurplePlugin *plugin)
 {
-	int i;
-	connection_nodes_to_delete = malloc(sizeof(ConnectionNode *) * num_connection_nodes);
-	twalk((void*)connection_root, add_connection_node_to_delete_array);
-
-	for (i = 0; i < num_connection_nodes; i++) {
-		ConnectionNode * node = connection_nodes_to_delete[i];
-		tdelete((void*)node, (void*)&connection_root, compare_connection_nodes);
-		free(node);
+	if (account_connect_times != NULL) {
+		g_hash_table_destroy(account_connect_times);
+		account_connect_times = NULL;
 	}
-	free(connection_nodes_to_delete);
-	connection_nodes_to_delete = NULL;
 
 	purple_signals_disconnect_by_handle(plugin);
 

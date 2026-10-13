@@ -342,13 +342,16 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
                     }
                     if (!matches) {
                         PropVariantClear(&propvar);
-                        propvar.vt = VT_LPWSTR;
-                        propvar.pwszVal = (LPWSTR)aumi;
-                        propStore->lpVtbl->SetValue(propStore, &PKEY_AppUserModel_ID, &propvar);
+                        PROPVARIANT new_propvar;
+                        PropVariantInit(&new_propvar);
+                        new_propvar.vt = VT_LPWSTR;
+                        new_propvar.pwszVal = (LPWSTR)aumi;
+                        propStore->lpVtbl->SetValue(propStore, &PKEY_AppUserModel_ID, &new_propvar);
                         propStore->lpVtbl->Commit(propStore);
                         need_save = TRUE;
+                    } else {
+                        PropVariantClear(&propvar);
                     }
-                    PropVariantClear(&propvar);
                 }
                 propStore->lpVtbl->Release(propStore);
             }
@@ -402,9 +405,13 @@ static wchar_t *clean_and_escape_text(const char *utf8_str, BOOL strip_html) {
                 if (out_idx > 0 && clean[out_idx - 1] != '\n') clean[out_idx++] = '\n';
             }
             // Skip until '>'
-            while (i < in_len && utf8_str[i] != '>') i++;
-            if (i < in_len) i++;
-            continue;
+            size_t tag_end = i;
+            while (tag_end < in_len && utf8_str[tag_end] != '>') tag_end++;
+            if (tag_end < in_len) {
+                i = tag_end + 1;
+                continue;
+            }
+            // If no closing '>', treat '<' as a regular character
         }
 
         if (strip_html && utf8_str[i] == '&') {
@@ -477,23 +484,23 @@ static wchar_t *clean_and_escape_text(const char *utf8_str, BOOL strip_html) {
     for (int j = 0; j < wlen - 1; j++) {
         switch (wstr[j]) {
             case L'&':
-                wcscpy(&escaped[e_idx], L"&amp;");
+                memcpy(&escaped[e_idx], L"&amp;", 5 * sizeof(wchar_t));
                 e_idx += 5;
                 break;
             case L'<':
-                wcscpy(&escaped[e_idx], L"&lt;");
+                memcpy(&escaped[e_idx], L"&lt;", 4 * sizeof(wchar_t));
                 e_idx += 4;
                 break;
             case L'>':
-                wcscpy(&escaped[e_idx], L"&gt;");
+                memcpy(&escaped[e_idx], L"&gt;", 4 * sizeof(wchar_t));
                 e_idx += 4;
                 break;
             case L'"':
-                wcscpy(&escaped[e_idx], L"&quot;");
+                memcpy(&escaped[e_idx], L"&quot;", 6 * sizeof(wchar_t));
                 e_idx += 6;
                 break;
             case L'\'':
-                wcscpy(&escaped[e_idx], L"&apos;");
+                memcpy(&escaped[e_idx], L"&apos;", 6 * sizeof(wchar_t));
                 e_idx += 6;
                 break;
             default:
@@ -592,27 +599,42 @@ WinToastResult win_toast_show_message(
         }
     }
 
-    // Build Toast XML
-    wchar_t xmlBuffer[4096];
-    int pos = _snwprintf(xmlBuffer, sizeof(xmlBuffer)/sizeof(wchar_t),
+    // Build Toast XML dynamically to avoid buffer truncation or overflow
+    size_t senderLen = wSender ? wcslen(wSender) : 0;
+    size_t msgLen = wMessage ? wcslen(wMessage) : 0;
+    size_t protoLen = wProtocol ? wcslen(wProtocol) : 0;
+    size_t imgLen = wcslen(wImagePath);
+    size_t xmlCapacity = senderLen + msgLen + protoLen + imgLen + 512;
+
+    wchar_t *xmlBuffer = (wchar_t *)malloc(xmlCapacity * sizeof(wchar_t));
+    if (!xmlBuffer) {
+        if (wSender) free(wSender);
+        if (wMessage) free(wMessage);
+        if (wProtocol) free(wProtocol);
+        return WIN_TOAST_NOT_DISPLAYED;
+    }
+
+    int pos = _snwprintf(xmlBuffer, xmlCapacity,
         L"<toast><visual><binding template=\"ToastGeneric\">"
         L"<text>%ls</text>"
         L"<text>%ls</text>",
         wSender ? wSender : L"",
         wMessage ? wMessage : L"");
 
-    if (wImagePath[0] != L'\0') {
-        pos += _snwprintf(xmlBuffer + pos, (sizeof(xmlBuffer)/sizeof(wchar_t)) - pos,
+    if (wImagePath[0] != L'\0' && pos > 0 && (size_t)pos < xmlCapacity) {
+        pos += _snwprintf(xmlBuffer + pos, xmlCapacity - pos,
             L"<image placement=\"appLogoOverride\" src=\"%ls\"/>", wImagePath);
     }
 
-    if (wProtocol && wProtocol[0] != L'\0') {
-        pos += _snwprintf(xmlBuffer + pos, (sizeof(xmlBuffer)/sizeof(wchar_t)) - pos,
+    if (wProtocol && wProtocol[0] != L'\0' && pos > 0 && (size_t)pos < xmlCapacity) {
+        pos += _snwprintf(xmlBuffer + pos, xmlCapacity - pos,
             L"<text placement=\"attribution\">%ls</text>", wProtocol);
     }
 
-    _snwprintf(xmlBuffer + pos, (sizeof(xmlBuffer)/sizeof(wchar_t)) - pos,
-        L"</binding></visual></toast>");
+    if (pos > 0 && (size_t)pos < xmlCapacity) {
+        _snwprintf(xmlBuffer + pos, xmlCapacity - pos,
+            L"</binding></visual></toast>");
+    }
 
     if (wSender) free(wSender);
     if (wMessage) free(wMessage);
@@ -624,17 +646,20 @@ WinToastResult win_toast_show_message(
     HRESULT hr = pRoActivateInstance(hsXmlDocClass, (void **)&pXmlInsp);
     free_hstring(hsXmlDocClass);
     if (FAILED(hr) || !pXmlInsp) {
+        free(xmlBuffer);
         return WIN_TOAST_NOT_DISPLAYED;
     }
 
     IXmlDocumentIO *pXmlIO = NULL;
     hr = pXmlInsp->lpVtbl->QueryInterface(pXmlInsp, &IID_IXmlDocumentIO, (void **)&pXmlIO);
     if (FAILED(hr) || !pXmlIO) {
+        free(xmlBuffer);
         pXmlInsp->lpVtbl->Release(pXmlInsp);
         return WIN_TOAST_NOT_DISPLAYED;
     }
 
     HSTRING hsXml = create_hstring(xmlBuffer);
+    free(xmlBuffer);
     hr = pXmlIO->lpVtbl->LoadXml(pXmlIO, hsXml);
     free_hstring(hsXml);
     if (FAILED(hr)) {
