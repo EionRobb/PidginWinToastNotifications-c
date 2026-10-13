@@ -26,7 +26,7 @@ LIBPURPLE_CFLAGS = -I${WIN32_PIDGIN_DIR}/libpurple -I${WIN32_PIDGIN_DIR}/libpurp
 PIDGIN_CFLAGS = -I${WIN32_PIDGIN_DIR}/pidgin -I${WIN32_PIDGIN_DIR}/pidgin/win32
 GLIB_CFLAGS = -I${WIN32_DEV_DIR}/gtk_2_0/include/glib-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/lib/glib-2.0/include
 
-WIN32_CFLAGS = -I${WIN32_DEV_DIR}/gtk_2_0/include/glib-2.0 -I${WIN32_PIDGIN_DIR}/libpurple/win32 -I${WIN32_PIDGIN_DIR}/pidgin/win32 -I${WIN32_DEV_DIR}/gtk_2_0/include -I${WIN32_DEV_DIR}/gtk_2_0/include/glib-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/lib/glib-2.0/include -Wno-format -I/usr/include/wine/windows -Wno-write-strings -Wno-strict-aliasing -I${WIN32_DEV_DIR}/gtk_2_0/include/gtk-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/include/cairo -I${WIN32_DEV_DIR}/gtk_2_0/include/atk-1.0 -I${WIN32_DEV_DIR}/gtk_2_0/include/pango-1.0 -I${WIN32_DEV_DIR}/gtk_2_0/lib/gtk-2.0/include -Wno-attributes
+WIN32_CFLAGS = -I${WIN32_DEV_DIR}/gtk_2_0/include/glib-2.0 -I${WIN32_PIDGIN_DIR}/libpurple/win32 -I${WIN32_PIDGIN_DIR}/pidgin/win32 -I${WIN32_DEV_DIR}/gtk_2_0/include -I${WIN32_DEV_DIR}/gtk_2_0/include/glib-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/lib/glib-2.0/include -Wno-format -I/usr/include/wine/windows -Wno-write-strings -Wno-strict-aliasing -I${WIN32_DEV_DIR}/gtk_2_0/include/gtk-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/include/cairo -I${WIN32_DEV_DIR}/gtk_2_0/include/atk-1.0 -I${WIN32_DEV_DIR}/gtk_2_0/include/pango-1.0 -I${WIN32_DEV_DIR}/gtk_2_0/include/gdk-pixbuf-2.0 -I${WIN32_DEV_DIR}/gtk_2_0/lib/gtk-2.0/include -Wno-attributes
 WIN32_LIBS = -L${WIN32_DEV_DIR}/gtk_2_0/lib -L${WIN32_PIDGIN_DIR}/libpurple -L${WIN32_PIDGIN_DIR}/pidgin -lglib-2.0 -lgobject-2.0 -lgtk-win32-2.0 -lgdk-win32-2.0 -lintl -lws2_32 -lpurple -lole32 -lshell32 -luuid -L. -lpidgin -lgdk_pixbuf-2.0 -lgdi32
 
 TARGET = PidginWinToastNotifications-c.dll

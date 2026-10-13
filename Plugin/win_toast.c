@@ -1,7 +1,5 @@
 #define COBJMACROS
-#define INITGUID
 #include <windows.h>
-#include <initguid.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,11 +10,15 @@
 
 WINOLEAPI PropVariantClear(PROPVARIANT *pvar);
 
-// PROPERTYKEY definition
-typedef struct _PROPERTYKEY {
+// PROPERTYKEY definition (matches Windows SDK / MinGW _tagpropertykey)
+#if !defined(_PROPERTYKEY_DEFINED_) && !defined(PROPERTYKEY_DEFINED)
+#define _PROPERTYKEY_DEFINED_
+#define PROPERTYKEY_DEFINED
+typedef struct _tagpropertykey {
     GUID fmtid;
     DWORD pid;
 } PROPERTYKEY;
+#endif
 
 #ifndef REFPROPERTYKEY
 #define REFPROPERTYKEY const PROPERTYKEY *
@@ -35,10 +37,21 @@ static const PROPERTYKEY PKEY_AppUserModel_ID = {
     5
 };
 
+// GUIDs - defined as static const to avoid collisions across different MinGW / Windows SDK versions
+static const GUID s_IID_IPropertyStore = { 0x886d8eeb, 0x8cf2, 0x4446, { 0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99 } };
+static const GUID s_IID_IInspectable = { 0xaf86e2e0, 0xb12d, 0x4c6a, { 0x9c, 0x5f, 0xd7, 0xaa, 0x65, 0x10, 0x1e, 0x90 } };
+static const GUID s_IID_IAgileObject = { 0x94ea2b94, 0xe9cc, 0x49e0, { 0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90 } };
+static const GUID s_IID_IToastNotificationManagerStatics = { 0x50ac103f, 0xd235, 0x4598, { 0xbb, 0xef, 0x98, 0xfe, 0x4d, 0x1a, 0x3a, 0xd4 } };
+static const GUID s_IID_IToastNotifier = { 0x75927b93, 0x03f3, 0x41ec, { 0x91, 0xd3, 0x6e, 0x5b, 0xac, 0x1b, 0x38, 0xe7 } };
+static const GUID s_IID_IToastNotificationFactory = { 0x04124b20, 0x82c6, 0x4229, { 0xb1, 0x09, 0xfd, 0x9e, 0xd4, 0x66, 0x2b, 0x53 } };
+static const GUID s_IID_IToastNotification = { 0x997e2675, 0x059e, 0x4e60, { 0x8b, 0x06, 0x17, 0x60, 0x91, 0x7c, 0x8b, 0x80 } };
+static const GUID s_IID_ITypedEventHandler_ToastNotification_IInspectable = { 0xab54de2d, 0x97d9, 0x5528, { 0xb6, 0xad, 0x10, 0x5a, 0xfe, 0x15, 0x65, 0x30 } };
+static const GUID s_IID_IXmlDocument = { 0xf7f3a506, 0x1e87, 0x42d6, { 0xbc, 0xfb, 0xb8, 0xc8, 0x09, 0xfa, 0x54, 0x94 } };
+static const GUID s_IID_IXmlDocumentIO = { 0x6cd0e74e, 0xee65, 0x4489, { 0x9e, 0xbf, 0xca, 0x43, 0xe8, 0x7b, 0xa6, 0x37 } };
+
 // IPropertyStore definition for MinGW
 #ifndef __IPropertyStore_INTERFACE_DEFINED__
 #define __IPropertyStore_INTERFACE_DEFINED__
-DEFINE_GUID(IID_IPropertyStore, 0x886d8eeb, 0x8cf2, 0x4446, 0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99);
 typedef struct IPropertyStore IPropertyStore;
 typedef struct IPropertyStoreVtbl {
     HRESULT (STDMETHODCALLTYPE *QueryInterface)(IPropertyStore *This, REFIID riid, void **ppvObject);
@@ -71,17 +84,6 @@ typedef enum RO_INIT_TYPE {
 typedef struct EventRegistrationToken {
     __int64 value;
 } EventRegistrationToken;
-
-// GUIDs
-DEFINE_GUID(IID_IInspectable, 0xaf86e2e0, 0xb12d, 0x4c6a, 0x9c, 0x5f, 0xd7, 0xaa, 0x65, 0x10, 0x1e, 0x90);
-DEFINE_GUID(IID_IAgileObject, 0x94ea2b94, 0xe9cc, 0x49e0, 0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90);
-DEFINE_GUID(IID_IToastNotificationManagerStatics, 0x50ac103f, 0xd235, 0x4598, 0xbb, 0xef, 0x98, 0xfe, 0x4d, 0x1a, 0x3a, 0xd4);
-DEFINE_GUID(IID_IToastNotifier, 0x75927b93, 0x03f3, 0x41ec, 0x91, 0xd3, 0x6e, 0x5b, 0xac, 0x1b, 0x38, 0xe7);
-DEFINE_GUID(IID_IToastNotificationFactory, 0x04124b20, 0x82c6, 0x4229, 0xb1, 0x09, 0xfd, 0x9e, 0xd4, 0x66, 0x2b, 0x53);
-DEFINE_GUID(IID_IToastNotification, 0x997e2675, 0x059e, 0x4e60, 0x8b, 0x06, 0x17, 0x60, 0x91, 0x7c, 0x8b, 0x80);
-DEFINE_GUID(IID_ITypedEventHandler_ToastNotification_IInspectable, 0xab54de2d, 0x97d9, 0x5528, 0xb6, 0xad, 0x10, 0x5a, 0xfe, 0x15, 0x65, 0x30);
-DEFINE_GUID(IID_IXmlDocument, 0xf7f3a506, 0x1e87, 0x42d6, 0xbc, 0xfb, 0xb8, 0xc8, 0x09, 0xfa, 0x54, 0x94);
-DEFINE_GUID(IID_IXmlDocumentIO, 0x6cd0e74e, 0xee65, 0x4489, 0x9e, 0xbf, 0xca, 0x43, 0xe8, 0x7b, 0xa6, 0x37);
 
 // Function pointer types
 typedef HRESULT (WINAPI *pfn_RoInitialize)(RO_INIT_TYPE initType);
@@ -230,8 +232,8 @@ static HRESULT STDMETHODCALLTYPE Handler_QueryInterface(
 {
     if (!ppvObject) return E_POINTER;
     if (IsEqualGUID(riid, &IID_IUnknown) ||
-        IsEqualGUID(riid, &IID_IAgileObject) ||
-        IsEqualGUID(riid, &IID_ITypedEventHandler_ToastNotification_IInspectable))
+        IsEqualGUID(riid, &s_IID_IAgileObject) ||
+        IsEqualGUID(riid, &s_IID_ITypedEventHandler_ToastNotification_IInspectable))
     {
         *ppvObject = This;
         This->lpVtbl->AddRef(This);
@@ -326,7 +328,7 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
         hr = persistFile->lpVtbl->Load(persistFile, shortcutPath, STGM_READWRITE);
         if (SUCCEEDED(hr)) {
             IPropertyStore *propStore = NULL;
-            hr = shellLink->lpVtbl->QueryInterface(shellLink, &IID_IPropertyStore, (void **)&propStore);
+            hr = shellLink->lpVtbl->QueryInterface(shellLink, &s_IID_IPropertyStore, (void **)&propStore);
             if (SUCCEEDED(hr)) {
                 PROPVARIANT propvar;
                 PropVariantInit(&propvar);
@@ -362,7 +364,7 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
         shellLink->lpVtbl->SetWorkingDirectory(shellLink, exePath);
 
         IPropertyStore *propStore = NULL;
-        hr = shellLink->lpVtbl->QueryInterface(shellLink, &IID_IPropertyStore, (void **)&propStore);
+        hr = shellLink->lpVtbl->QueryInterface(shellLink, &s_IID_IPropertyStore, (void **)&propStore);
         if (SUCCEEDED(hr)) {
             PROPVARIANT propvar;
             PropVariantInit(&propvar);
@@ -651,7 +653,7 @@ WinToastResult win_toast_show_message(
     }
 
     IXmlDocumentIO *pXmlIO = NULL;
-    hr = pXmlInsp->lpVtbl->QueryInterface(pXmlInsp, &IID_IXmlDocumentIO, (void **)&pXmlIO);
+    hr = pXmlInsp->lpVtbl->QueryInterface(pXmlInsp, &s_IID_IXmlDocumentIO, (void **)&pXmlIO);
     if (FAILED(hr) || !pXmlIO) {
         free(xmlBuffer);
         pXmlInsp->lpVtbl->Release(pXmlInsp);
@@ -669,7 +671,7 @@ WinToastResult win_toast_show_message(
     }
 
     IXmlDocument *pXmlDoc = NULL;
-    hr = pXmlInsp->lpVtbl->QueryInterface(pXmlInsp, &IID_IXmlDocument, (void **)&pXmlDoc);
+    hr = pXmlInsp->lpVtbl->QueryInterface(pXmlInsp, &s_IID_IXmlDocument, (void **)&pXmlDoc);
     if (FAILED(hr) || !pXmlDoc) {
         pXmlIO->lpVtbl->Base.Release((IInspectable *)pXmlIO);
         pXmlInsp->lpVtbl->Release(pXmlInsp);
@@ -679,7 +681,7 @@ WinToastResult win_toast_show_message(
     // 2. Create ToastNotificationFactory & ToastNotification
     HSTRING hsToastClass = create_hstring(L"Windows.UI.Notifications.ToastNotification");
     IToastNotificationFactory *pToastFactory = NULL;
-    hr = pRoGetActivationFactory(hsToastClass, &IID_IToastNotificationFactory, (void **)&pToastFactory);
+    hr = pRoGetActivationFactory(hsToastClass, &s_IID_IToastNotificationFactory, (void **)&pToastFactory);
     free_hstring(hsToastClass);
     if (FAILED(hr) || !pToastFactory) {
         pXmlDoc->lpVtbl->Base.Release((IInspectable *)pXmlDoc);
@@ -712,7 +714,7 @@ WinToastResult win_toast_show_message(
     // 3. Create ToastNotifier & Show
     HSTRING hsManagerClass = create_hstring(L"Windows.UI.Notifications.ToastNotificationManager");
     IToastNotificationManagerStatics *pManager = NULL;
-    hr = pRoGetActivationFactory(hsManagerClass, &IID_IToastNotificationManagerStatics, (void **)&pManager);
+    hr = pRoGetActivationFactory(hsManagerClass, &s_IID_IToastNotificationManagerStatics, (void **)&pManager);
     free_hstring(hsManagerClass);
     if (FAILED(hr) || !pManager) {
         pToast->lpVtbl->Base.Release((IInspectable *)pToast);
