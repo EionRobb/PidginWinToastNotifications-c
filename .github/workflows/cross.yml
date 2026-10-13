@@ -1,0 +1,89 @@
+name: Cross compile for Windows
+on:
+  - push
+  - pull_request
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MinGW
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-mingw-w64-i686-win32
+
+      - name: Load Pidgin from cache
+        id: pidgin-cache
+        uses: actions/cache@v4
+        with:
+          path: pidgin
+          key: pidgin-2.14.1
+      
+      - name: Download Pidgin
+        if: steps.pidgin-cache.outputs.cache-hit != 'true'
+        run: |
+          curl --http1.1 -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1.tar.bz2/download -o pidgin.tar.bz2
+          tar -xf pidgin.tar.bz2
+          mv pidgin-2.14.1 pidgin
+          curl --http1.1 -L https://sourceforge.net/projects/pidgin/files/Pidgin/2.14.1/pidgin-2.14.1-win32-bin.zip/download -o pidgin-win32bin.zip
+          unzip pidgin-win32bin.zip
+          cp pidgin-2.14.1-win32bin/libpurple.dll pidgin/libpurple/
+          cp pidgin-2.14.1-win32bin/pidgin.dll pidgin/pidgin/
+      
+      - name: Load Win32 deps from cache
+        id: win32-cache
+        uses: actions/cache@v4
+        with:
+          path: win32-dev
+          key: win32-cache
+      
+      - name: Setup WinPidgin build
+        if: steps.win32-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p win32-dev/gtk_2_0
+          curl --http1.1 -L https://download.gnome.org/binaries/win32/gtk+/2.24/gtk+-bundle_2.24.10-20120208_win32.zip -o gtk-bundle.zip
+          unzip gtk-bundle.zip -d win32-dev/gtk_2_0
+          rm gtk-bundle.zip
+          ls win32-dev/gtk_2_0
+
+      - name: make
+        run: |
+          export WIN32_CC=i686-w64-mingw32-gcc
+          export WIN32_COMPILER=i686-w64-mingw32-gcc
+          export WIN32_DEV_TOP=win32-dev
+          export PIDGIN_TREE_TOP=pidgin
+          make
+
+      - name: archive
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && !env.ACT
+        uses: actions/upload-artifact@v4
+        with: 
+            name: plugin 
+            path: "*.dll"
+
+      - name: Set date
+        id: date
+        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && !env.ACT
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "*.dll"
+          tag: daily-${{ steps.date.outputs.DATE }}
+          name: Daily ${{ steps.date.outputs.DATE }}
+          allowUpdates: true
+          makeLatest: true
+
+      - name: attest
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main') && !env.ACT
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "*.dll"
