@@ -1,9 +1,9 @@
-# PidginWinToastNotifications
+# PidginWinToastNotifications-c
 
-[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/EionRobb/PidginWinToastNotifications?label=Latest%20release%20version)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
-[![GitHub Release Date](https://img.shields.io/github/release-date/EionRobb/PidginWinToastNotifications?label=Latest%20release%20date)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
-[![GitHub](https://img.shields.io/github/license/EionRobb/PidginWinToastNotifications?label=License)](https://github.com/EionRobb/PidginWinToastNotifications/blob/master/LICENSE)
-[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/EionRobb/PidginWinToastNotifications/total?label=Downloads)](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/EionRobb/PidginWinToastNotifications-c?label=Latest%20release%20version)](https://github.com/EionRobb/PidginWinToastNotifications-c/releases/latest)
+[![GitHub Release Date](https://img.shields.io/github/release-date/EionRobb/PidginWinToastNotifications-c?label=Latest%20release%20date)](https://github.com/EionRobb/PidginWinToastNotifications-c/releases/latest)
+[![GitHub](https://img.shields.io/github/license/EionRobb/PidginWinToastNotifications-c?label=License)](https://github.com/EionRobb/PidginWinToastNotifications-c/blob/master/LICENSE)
+[![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/EionRobb/PidginWinToastNotifications-c/total?label=Downloads)](https://github.com/EionRobb/PidginWinToastNotifications-c/releases/latest)
 
 Windows toast notification plugin for [Pidgin](https://pidgin.im/).
 
@@ -59,7 +59,7 @@ To display the protocol, account and chat name in the toast notifications the Wi
 
 ## Installation
 
-1. Download the dll files from the [newest release](https://github.com/EionRobb/PidginWinToastNotifications/releases/latest).
+1. Download the dll files from the [newest release](https://github.com/EionRobb/PidginWinToastNotifications-c/releases/latest).
 2. Copy the file PidginWinToastNotifications-c.dll to the plugin directory of Pidgin. This is usually "C:\Program Files (x86)\Pidgin\plugins" on 64-bit versions of Windows or "C:\Program Files\Pidgin\plugins" on a 32-bit version.
 3. Start Pidgin. Open the plugin window and enable "Windows Toast Notifications".
 
@@ -67,7 +67,7 @@ To display the protocol, account and chat name in the toast notifications the Wi
 
 If the plugin cannot be enabled, there should be an error message in the error search window available in the help menu of Pidgin.
 
-If you experience a problem or have an idea for a new feature, [feel free to open an issue](https://github.com/EionRobb/PidginWinToastNotifications/issues).
+If you experience a problem or have an idea for a new feature, [feel free to open an issue](https://github.com/EionRobb/PidginWinToastNotifications-c/issues).
 
 ### Known errors
 
