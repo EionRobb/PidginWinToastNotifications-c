@@ -5,6 +5,7 @@
 #include <string.h>
 #include <wchar.h>
 #include <shlobj.h>
+#include <shellapi.h>
 #include <ole2.h>
 #include "win_toast.h"
 
@@ -215,10 +216,49 @@ static pfn_SetCurrentProcessExplicitAppUserModelID pSetCurrentProcessExplicitApp
 
 static const wchar_t *g_appName = L"Pidgin";
 static wchar_t g_aumi[128] = L"";
+static wchar_t g_shortcutPath[MAX_PATH] = L"";
+
+static BOOL is_multiple_instances(void) {
+    int numArgs = 0;
+    LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &numArgs);
+    if (!argv) return FALSE;
+    BOOL multiple = FALSE;
+    for (int i = 1; i < numArgs; i++) {
+        if (wcscmp(argv[i], L"-m") == 0 || wcscmp(argv[i], L"--multiple") == 0) {
+            multiple = TRUE;
+            break;
+        }
+        if (argv[i][0] == L'-' && argv[i][1] != L'-' && argv[i][1] != L'\0') {
+            BOOL cluster_valid = TRUE;
+            BOOL has_m = FALSE;
+            for (int j = 1; argv[i][j] != L'\0'; j++) {
+                wchar_t ch = argv[i][j];
+                if (ch == L'm') {
+                    has_m = TRUE;
+                } else if (ch == L'd' || ch == L'f' || ch == L'h' || ch == L'n' || ch == L'v') {
+                    // valid boolean flags
+                } else {
+                    cluster_valid = FALSE;
+                    break;
+                }
+            }
+            if (cluster_valid && has_m) {
+                multiple = TRUE;
+                break;
+            }
+        }
+    }
+    LocalFree(argv);
+    return multiple;
+}
 
 static const wchar_t *win_toast_get_app_id(void) {
     if (g_aumi[0] == L'\0') {
-        _snwprintf(g_aumi, sizeof(g_aumi) / sizeof(g_aumi[0]), L"Pidgin.Pidgin.%lu", (unsigned long)GetCurrentProcessId());
+        if (is_multiple_instances()) {
+            _snwprintf(g_aumi, sizeof(g_aumi) / sizeof(g_aumi[0]), L"Pidgin.Pidgin.%lu", (unsigned long)GetCurrentProcessId());
+        } else {
+            wcsncpy(g_aumi, L"Pidgin.Pidgin", sizeof(g_aumi) / sizeof(g_aumi[0]) - 1);
+        }
     }
     return g_aumi;
 }
@@ -303,12 +343,17 @@ static void free_hstring(HSTRING hs) {
 // Ensure Start Menu shortcut with AUMI
 static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
     WCHAR appData[MAX_PATH];
-    WCHAR shortcutPath[MAX_PATH];
     WCHAR exePath[MAX_PATH];
     DWORD len = GetEnvironmentVariableW(L"APPDATA", appData, MAX_PATH);
     if (len == 0 || len >= MAX_PATH) return E_FAIL;
 
-    _snwprintf(shortcutPath, MAX_PATH, L"%s\\Microsoft\\Windows\\Start Menu\\Programs\\%s.lnk", appData, app_name);
+    if (is_multiple_instances()) {
+        _snwprintf(g_shortcutPath, MAX_PATH, L"%s\\Microsoft\\Windows\\Start Menu\\Programs\\%s (%lu).lnk",
+                   appData, app_name, (unsigned long)GetCurrentProcessId());
+    } else {
+        _snwprintf(g_shortcutPath, MAX_PATH, L"%s\\Microsoft\\Windows\\Start Menu\\Programs\\%s.lnk",
+                   appData, app_name);
+    }
     GetModuleFileNameW(NULL, exePath, MAX_PATH);
 
     IShellLinkW *shellLink = NULL;
@@ -323,9 +368,9 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
     }
 
     BOOL need_save = FALSE;
-    DWORD attr = GetFileAttributesW(shortcutPath);
+    DWORD attr = GetFileAttributesW(g_shortcutPath);
     if (attr != INVALID_FILE_ATTRIBUTES) {
-        hr = persistFile->lpVtbl->Load(persistFile, shortcutPath, STGM_READWRITE);
+        hr = persistFile->lpVtbl->Load(persistFile, g_shortcutPath, STGM_READWRITE);
         if (SUCCEEDED(hr)) {
             IPropertyStore *propStore = NULL;
             hr = shellLink->lpVtbl->QueryInterface(shellLink, &s_IID_IPropertyStore, (void **)&propStore);
@@ -336,9 +381,7 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
                 if (SUCCEEDED(hr)) {
                     BOOL matches = FALSE;
                     if (propvar.vt == VT_LPWSTR && propvar.pwszVal) {
-                        if (wcscmp(propvar.pwszVal, aumi) == 0 ||
-                            wcscmp(propvar.pwszVal, L"Pidgin.Pidgin") == 0 ||
-                            wcsncmp(propvar.pwszVal, L"Pidgin.Pidgin.", 14) == 0) {
+                        if (wcscmp(propvar.pwszVal, aumi) == 0) {
                             matches = TRUE;
                         }
                     }
@@ -378,7 +421,7 @@ static HRESULT ensure_shortcut(const wchar_t *app_name, const wchar_t *aumi) {
     }
 
     if (need_save) {
-        persistFile->lpVtbl->Save(persistFile, shortcutPath, TRUE);
+        persistFile->lpVtbl->Save(persistFile, g_shortcutPath, TRUE);
     }
 
     persistFile->lpVtbl->Release(persistFile);
@@ -732,6 +775,14 @@ WinToastResult win_toast_show_message(
         return WIN_TOAST_NOT_DISPLAYED;
     }
 
+    int setting = 0;
+    hr = pNotifier->lpVtbl->get_Setting(pNotifier, &setting);
+    if (SUCCEEDED(hr) && setting != 0) {
+        pNotifier->lpVtbl->Base.Release((IInspectable *)pNotifier);
+        pToast->lpVtbl->Base.Release((IInspectable *)pToast);
+        return WIN_TOAST_NOT_DISPLAYED;
+    }
+
     hr = pNotifier->lpVtbl->Show(pNotifier, pToast);
 
     pNotifier->lpVtbl->Base.Release((IInspectable *)pNotifier);
@@ -752,6 +803,10 @@ void win_toast_uninit(void) {
     if (g_hComBase) {
         FreeLibrary(g_hComBase);
         g_hComBase = NULL;
+    }
+    if (is_multiple_instances() && g_shortcutPath[0] != L'\0') {
+        DeleteFileW(g_shortcutPath);
+        g_shortcutPath[0] = L'\0';
     }
     g_isInitialized = FALSE;
     g_clickCallback = NULL;
